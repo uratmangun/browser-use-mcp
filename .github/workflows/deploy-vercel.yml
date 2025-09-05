@@ -19,28 +19,25 @@ jobs:
       - name: "📥 Checkout code"
         uses: actions/checkout@v4
 
-      - name: "🛠️ Setup pnpm"
-        uses: pnpm/action-setup@v2
+      - name: "🛠️ Setup bun"
+        uses: oven-sh/setup-bun@v1
         with:
-          version: 8
+          bun-version: latest
 
       - name: "🧰 Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
 
       - name: "📦 Install dependencies"
         run: |
-          # Install dependencies while skipping optional native packages
-          pnpm install --no-frozen-lockfile --ignore-scripts --no-optional
-          # Reinstall only the critical packages that need scripts
-          pnpm rebuild next
+          # Install dependencies with bun
+          bun install --no-save
         env:
           PYTHON: python3
 
       - name: "🛠️ Install Vercel CLI"
-        run: pnpm add -g vercel@latest
+        run: bun add -g vercel@latest
 
       - name: "🧹 Check and delete existing matching Vercel projects"
         id: cleanup-projects
@@ -145,6 +142,19 @@ jobs:
             echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
             echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
             
+            # Build the application (can handle Next.js or static)
+            echo "🔨 Building application..."
+            if [ -f "next.config.js" ] || [ -f "next.config.mjs" ] || [ -f "next.config.ts" ]; then
+              echo "Next.js detected, building with bun build"
+              bun run build
+            elif [ -f "package.json" ] && grep -q '"build"' package.json; then
+              echo "Build script found, running bun build"
+              bun run build
+            else
+              echo "No specific build configuration found, attempting standard build"
+              bun run build || echo "Build command not available"
+            fi
+            
             # Link the project to current directory
             echo "🔗 Linking Vercel project..."
             vercel link --token="$VERCEL_TOKEN" --yes --project="$PROJECT_ID"
@@ -155,7 +165,7 @@ jobs:
           fi
 
       - name: "🏗️ Build application"
-        run: pnpm run build
+        run: bun run build
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
